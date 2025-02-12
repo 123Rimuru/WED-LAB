@@ -10,6 +10,7 @@ pi = 3.14
 an = 360
 lcb = 85
 
+# change this for different trims
 trim = 1
 
 z = [i/10 for i in range(-10, 139)]
