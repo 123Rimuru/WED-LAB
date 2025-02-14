@@ -1,0 +1,132 @@
+% clc
+close all
+clear all
+alpha = 0:0.01:3;
+number_modes = 5;
+Rc = zeros(size(alpha)); Rp = Rc; Rh = Rc;
+Tc = ones(size(alpha)); Tp = Tc; Th = Tc;
+% Physical and geometrical parameters
+L = 1; % Radius of the circle or half the width
+left_length = -5 * L; right_length = 5 * L;
+h = 2; Delta = 0.04; 
+k_number = 100; k_max = 10 * pi; x_number = 400;
+number_modes = 10; dof = 'one'; mode = 'pitch';
+density = 0.5; % Density of the body relative to water
+scale = 0; % Scale = 0 - rigid plate, scale = 1 - circular cylinder
+fsindx = x_number / 2; % Index for the node at which we measure free-surface elevation
+% Initialize motion arrays
+heave_motion = zeros(size(alpha));
+pitch_motion = zeros(size(alpha));
+% Geometric configuration of domain
+if scale == 0 % Thin rigid plate of width 2L
+    l = -L; r = L;
+    x_left = left_length:L/x_number:l;
+    x_right = r:L/x_number:right_length;
+    [panelsL, panelsR, panels0, panelsB, panelsF] = ...
+        circlebody_twod(2*L, 0, l, r, h, Delta, scale);
+elseif scale == 1 % Semi-submerged cylinder of radius L
+    DeltaCyl = 10 * Delta; % Space around cylinder to reduce singular effects
+    l = -L - DeltaCyl; r = L + DeltaCyl;
+    x_left = left_length:L/x_number:l;
+    x_right = r:L/x_number:right_length;
+    [panelsL, panelsR, panels0, panelsB, panelsF, Nfl, Nfr] = ...
+        circlebody_twod(2*L, 0, l, r, h, Delta, scale);
+    for inc = 1:Nfr
+        x_rin(inc) = (panelsF(inc,1) + panelsF(inc,3)) / 2; 
+    end
+    for inc = 1:Nfl
+        x_lin(inc) = (panelsF(Nfr+inc,1) + panelsF(Nfr+inc,3)) / 2; 
+    end
+end
+% Geometrical parameters
+if scale == 0 % Thin rigid plate
+    vol = (pi * L^2); % Plate has no volume so we set the same as the semicircle
+    m = density * vol;
+    Im = density * 2 * (L^3) / 3;
+    Ia = 2 * (L^3) / 3;
+    I3v = 0;
+    W = 2 * L;
+    Iw = Ia + I3v;
+elseif scale == 1 % Semi-submerged cylinder
+    vol = (pi * L^2);
+    m = density * vol;
+    Im = density * pi * (L^4) / 2;
+    Ia = 2 * (L^3) / 3;
+    I3v = -2 * (L^3) / 3;
+    W = 2 * L;
+    Iw = Ia + I3v;
+end
+% Solve for motions
+for j = 2:length(alpha)
+    j
+    [xi, R, T, poten, fpoten] = ...
+        rigid_body_motion(alpha(j), h, l, r, panelsL, panelsR, panels0, panelsB, panelsF, ...
+        m, Im, W, Iw, number_modes, 'coupled');
+    Rc(j) = R(1); Tc(j) = T(1);
+    heave_motion(j) = abs(xi(1));
+    pitch_motion(j) = abs(xi(2));
+end
+% Compute the squares of the motions
+heave_motion_squared = heave_motion.^2;
+pitch_motion_squared = pitch_motion.^2;
+% Constants
+g = 9.81; % Gravitational acceleration (m/s^2)
+% Calculate omega for alpha range
+omega = sqrt(g * alpha);
+% Define the Pierson-Moskowitz spectrum
+H_s = 2; % Significant wave height (m)
+w_p = 0.9; % Peak frequency (rad/s)
+S_omega = (5/16) * (H_s^2 / w_p^4) .* omega.^(-5) .* exp(-1.25 * (w_p ./ omega).^4);
+% Ensure spectrum is valid for small omega
+S_omega(isnan(S_omega) | isinf(S_omega)) = 0;
+% Calculate Si(w) = |RAO|^2 * S(w)
+S_heave = heave_motion_squared .* S_omega;
+S_pitch = pitch_motion_squared .* S_omega;
+% Plot results
+figure;
+plot(omega, S_heave, 'b-', 'LineWidth', 2); hold on;
+plot(omega, S_pitch, 'r-', 'LineWidth', 2);
+xlabel('\omega (rad/s)', 'FontSize', 18);
+ylabel('S_i(\omega)', 'FontSize', 18);
+legend('S_{heave}', 'S_{pitch}');
+title('Response Spectra for Heave and Pitch Motions');
+grid on;
+% Compute the frequency interval (dw)
+dw = omega(2) - omega(1);
+% Calculate amplitude spectrum a_i(w)
+a_heave = sqrt(2 * S_heave * dw);
+a_pitch = sqrt(2 * S_pitch * dw);
+% Plot amplitude spectrum
+figure;
+plot(omega, a_heave, 'b-', 'LineWidth', 2); hold on;
+plot(omega, a_pitch, 'r-', 'LineWidth', 2);
+xlabel('\omega (rad/s)', 'FontSize', 18);
+ylabel('a_i(\omega)', 'FontSize', 18);
+legend('a_{heave}', 'a_{pitch}');
+title('Amplitude Spectrum for Heave and Pitch Motions');
+grid on;
+% Time range for motion calculations
+t = 0:0.1:50; % Time array (example: 0 to 20 seconds in steps of 0.1 seconds)
+% Generate random epsilon values between 0 and 2*pi for each frequency
+epsilon_heave = 2 * pi * rand(size(omega));
+epsilon_pitch = 2 * pi * rand(size(omega));
+% Initialize body motions for heave and pitch
+xi_heave = zeros(size(t));
+xi_pitch = zeros(size(t));
+% Calculate body motions
+for i = 1:length(omega)
+    xi_heave = xi_heave + a_heave(i) * cos(omega(i) * t + epsilon_heave(i));
+    xi_pitch = xi_pitch + a_pitch(i) * cos(omega(i) * t + epsilon_pitch(i));
+end
+% Plot body motions
+figure;
+plot(t, xi_heave, 'b-', 'LineWidth', 2); hold on;
+plot(t, xi_pitch, 'r-', 'LineWidth', 2);
+xlabel('Time (s)', 'FontSize', 18);
+ylabel('\xi (Body Motion)', 'FontSize', 18);
+legend('\xi_{heave}', '\xi_{pitch}');
+title('Body Motions for Heave and Pitch');
+grid on;
+print -djpeg body_motions_heave_pitch
+print -djpeg amplitude_spectrum_heave_pitch
+print -djpeg wave_bem_example_floating_RT
