@@ -8,10 +8,9 @@ id = 1
 con = 0.3048
 pi = 3.14
 an = 360
-lcb = 85
+lcb = 77.68
 
-# change this for different trims
-trim = 1
+trim = 2.95
 
 z = [i/10 for i in range(-10, 139)]
 x = []
