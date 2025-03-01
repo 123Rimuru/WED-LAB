@@ -27,10 +27,10 @@ lcg /= sum(w)
 
 with open('output.txt', 'w') as f:
     # print(x, file=f)
-    print(round(we, 2), file=f)
-    print(sum(w), file=f)
+    # print(round(we, 2), file=f)
+    # print(sum(w), file=f)
 
     # print('\t'.join(w))
 
-    # for i in w:
-    #     print(i, file=f)
+    for i in w:
+        print(i, file=f)
